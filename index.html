@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>表達示意輔具遊戲 - 我喜歡！</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      background-color: #FFF9E6; /* 高對比柔和背景，減少視覺刺激過度 */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 初始提示字體 */
+    #instruction {
+      font-size: 3rem;
+      font-weight: bold;
+      color: #555;
+      margin-bottom: 20px;
+      text-align: center;
+      transition: opacity 0.3s;
+    }
+
+    /* 主要動畫容器 */
+    .display-area {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    /* 笑臉 Emoji */
+    .smiley {
+      font-size: 15rem;
+      line-height: 1;
+      opacity: 0.2;
+      transform: scale(0.8);
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
+    }
+
+    .smiley.active {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+
+    /* 文字標籤 */
+    .text-label {
+      font-size: 5rem;
+      font-weight: 900;
+      color: #FF4081;
+      margin-top: 20px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: transform 0.3s, opacity 0.3s;
+      text-shadow: 3px 3px 0px #FFF, 6px 6px 0px rgba(0,0,0,0.1);
+    }
+
+    .text-label.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* 心心動畫粒子容器 */
+    #heart-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .heart {
+      position: absolute;
+      font-size: 3rem;
+      animation: floatUp 1.5s ease-out forwards;
+      opacity: 1;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translate(0, 0) scale(0.5) rotate(0deg);
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.9;
+      }
+      100% {
+        transform: translate(var(--tx), var(--ty)) scale(1.5) rotate(var(--rot));
+        opacity: 0;
+      }
+    }
+
+    /* 開啟聲音解鎖遮罩（針對瀏覽器自動播放限制） */
+    #start-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+      cursor: pointer;
+    }
+
+    .start-btn {
+      font-size: 3rem;
+      padding: 20px 40px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="start-overlay">
+    <button class="start-btn">點擊螢幕或按按鈕開始遊戲</button>
+  </div>
+
+  <div id="instruction">按下大按鈕表達你的想法！</div>
+
+  <div class="display-area">
+    <div id="smiley" class="smiley">😊</div>
+    <div id="text" class="text-label">我喜歡！</div>
+  </div>
+
+  <div id="heart-container"></div>
+
+  <script>
+    const smileyEl = document.getElementById('smiley');
+    const textEl = document.getElementById('text');
+    const heartContainer = document.getElementById('heart-container');
+    const instructionEl = document.getElementById('instruction');
+    const overlay = document.getElementById('start-overlay');
+
+    let isCooldown = false;
+    let audioUnlocked = false;
+    let cantoneseVoice = null;
+
+    // 載入並比對廣東話語音包
+    function loadVoices() {
+      if ('speechSynthesis' in window) {
+        const voices = window.speechSynthesis.getVoices();
+        // 優先搜尋 zh-HK、yue-HK 或名稱含 Cantonese 的語音
+        cantoneseVoice = voices.find(voice => 
+          voice.lang === 'zh-HK' || 
+          voice.lang === 'yue-HK' || 
+          voice.lang.toLowerCase().includes('hk') ||
+          voice.name.includes('Sin-Ji') || 
+          voice.name.includes('Cantonese')
+        );
+      }
+    }
+
+    if ('speechSynthesis' in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // 解鎖語音播放
+    function unlockAudio() {
+      if (!audioUnlocked) {
+        const whisper = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(whisper);
+        audioUnlocked = true;
+        overlay.style.display = 'none';
+      }
+    }
+
+    overlay.addEventListener('click', unlockAudio);
+
+    // 全域按鍵監聽：支援 Enter 與 Space Bar
+    window.addEventListener('keydown', (event) => {
+      if (!audioUnlocked) unlockAudio();
+
+      if (event.code === 'Space' || event.code === 'Enter' || event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        triggerAction();
+      }
+    });
+
+    // 觸發反饋邏輯
+    function triggerAction() {
+      if (isCooldown) return;
+      isCooldown = true;
+
+      instructionEl.style.opacity = '0';
+      smileyEl.classList.add('active');
+      textEl.classList.add('active');
+
+      createHearts(20);
+      speakText("我喜歡！");
+
+      setTimeout(() => {
+        smileyEl.classList.remove('active');
+        textEl.classList.remove('active');
+        instructionEl.style.opacity = '1';
+        isCooldown = false;
+      }, 1800);
+    }
+
+    // 廣東話語音播放函數
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-HK'; // 設定語言代碼為廣東話 (香港)
+        utterance.rate = 0.85;    // 語速略為放慢，方便特教學生聆聽
+        utterance.pitch = 1.1;     // 提高音調，增添愉悅感
+
+        if (cantoneseVoice) {
+          utterance.voice = cantoneseVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // 生成心心特效
+    function createHearts(count) {
+      const emojis = ['❤️', '💖', '💗', '💕', '🥰'];
+      
+      for (let i = 0; i < count; i++) {
+        const heart = document.createElement('div');
+        heart.classList.add('heart');
+        heart.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+
+        const startX = window.innerWidth / 2 + (Math.random() - 0.5) * 100;
+        const startY = window.innerHeight / 2 + (Math.random() - 0.5) * 100;
+
+        const tx = (Math.random() - 0.5) * 600 + 'px';
+        const ty = -(Math.random() * 400 + 200) + 'px';
+        const rot = (Math.random() - 0.5) * 360 + 'deg';
+
+        heart.style.left = `${startX}px`;
+        heart.style.top = `${startY}px`;
+        heart.style.setProperty('--tx', tx);
+        heart.style.setProperty('--ty', ty);
+        heart.style.setProperty('--rot', rot);
+
+        heartContainer.appendChild(heart);
+
+        setTimeout(() => {
+          heart.remove();
+        }, 1500);
+      }
+    }
+  </script>
+</body>
+</html>
